@@ -10,9 +10,10 @@ project = "My Awesome Module"
 project_no_spaces = project.replace(' ', '')
 version = '0.1'
 description = 'It does cool things'
-authors = ['Foo Bar', 'John Doe']
+authors = ['Ivan Yonchovski']
 authors_string = ', '.join(authors)
-emails = ['foobar@example.com', 'johndoe@thisisfake.org']
+emails = ['yyoncho@gmail.com']
 license = 'MIT'
 copyright = '2015 ' + authors_string
-url = 'http://example.com/'
+url = 'http://gith.com/'
+

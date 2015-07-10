@@ -1,5 +1,5 @@
-$project
-$project_underline
+My Awesome Module
+=================
 
 Contents:
 

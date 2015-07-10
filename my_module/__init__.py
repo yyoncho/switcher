@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""$description"""
+"""It does cool things"""
 
-from $package import metadata
+from my_module import metadata
 
 
 __version__ = metadata.version
