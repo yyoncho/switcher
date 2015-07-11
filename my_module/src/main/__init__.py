@@ -13,13 +13,15 @@ from _Application import _Application as App
 
 import common
 
-
 logger = common.getLogger("default")
 
 FORWARD_KEY = "<ctrl><alt>n"
 BACKWARD_KEY = "<ctrl><alt>p"
-WORKSPACE_ITEM_WIDTH = 50
+SHOW_MAIN = "Super_L"
+
+
 WORKSPACE_ITEM_HEIGHT = 20
+
 BOLD_TEXT = '<span size="12000"><b>%s</b></span>'
 NORMAL_TEXT = '<span size="12000">%s</span>'
 
@@ -120,7 +122,7 @@ class KeyboardManager:
         if not success:
             raise Exception("Failed to register key " + backKey)
 
-        displayWindowKey = "Super_L"
+        displayWindowKey = SHOW_MAIN
         success = keybinder.bind(displayWindowKey, self._display, None)
         if not success:
             raise Exception("Failed to register key " + displayWindowKey)
@@ -208,8 +210,6 @@ class Window:
 
     def __str__(self):
         return window.get_name()
-
-logger = common.getLogger("Window")
 
 
 class MainWindow(gtk.Window):
