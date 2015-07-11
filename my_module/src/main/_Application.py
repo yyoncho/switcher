@@ -7,13 +7,10 @@ Created on Jan 1, 2011
 import gtk
 
 
-''' Application class containing logic for GTK start.
-''' 
 class _Application:
     '''
     classdocs
     '''
-
     def __init__(self, mainWindow):
         '''
         Constructor

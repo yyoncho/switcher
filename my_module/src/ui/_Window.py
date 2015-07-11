@@ -7,17 +7,14 @@ Created on Jan 1, 2011
 import common
 import gtk
 import gtk.gdk
-import main
-import pygtk
-import wnck
 
 WORKSPACE_ITEM_WIDTH = 50
 WORKSPACE_ITEM_HEIGHT = 20
 
 logger = common.getLogger("Window")
 
-class Window(gtk.Window):
 
+class Window(gtk.Window):
     def __init__(self):
         logger.debug("__init__")
 
@@ -32,9 +29,11 @@ class Window(gtk.Window):
         self._table = gtk.Table()
         self.add(self._table)
         self.show_all()
+        self.__eventBoxToWindow = {}
 
     def setWorkspaces(self, workspaces):
         logger.debug("setWorkspaces")
+        self.__eventBoxToWindow = {}
 
         for child in self._table.get_children():
             self._table.remove(child)
@@ -45,42 +44,53 @@ class Window(gtk.Window):
             header = self._createHeader(ws)
             self._table.attach(header, col, col + 1, 0, 1)
             for win in ws.windows:
+                frame = gtk.Frame()
                 control = self._createWinControl(win)
-                self._table.attach(control, col, col + 1, row, row + 1)
+                frame.add(control)
+                self._table.attach(frame, col, col + 1, row, row + 1)
                 row = row + 1
             col = col + 1
-
+        self.set_default_size(-1, -1)
         self.show_all()
+        self.present()
+        self.set_resizable(False)
 
     def _key_press_event(self, sender, eventData):
         logger.debug("_key_press_event")
         if eventData.keyval == gtk.keysyms.Escape:
             self.hide()
 
-    def _init(self, sender, eventData):
-        print eventData.type
-
     def _focus_changed(self, sender, data):
         self.hide()
 
     def _createWinControl(self, win):
-        pixmap = gtk.Image()
-        pixmap.set_from_pixbuf(win.icon)
         hbox = gtk.HBox()
-        label = gtk.Label(win.name[:20])
+        labelText = win.name.decode('utf-8')
+        if(win.isActive()):
+            label = gtk.Label("<b>" + labelText[:30] + "</b>")
+        else:
+            label = gtk.Label(labelText[:30])
+
+        label.set_use_markup(True)
         label.set_tooltip_text(win.name)
         eventBox = gtk.EventBox()
-        '''     eventBox.modify_bg(gtk.STATE_NORMAL,
-                            eventBox.get_colormap().alloc_color("green"))'''
+        self.__eventBoxToWindow[eventBox] = win
+
         eventBox.add(label)
+        eventBox.connect("button-press-event", self._on_button_press_event)
+
+        pixmap = gtk.Image()
+        pixmap.set_from_pixbuf(win.icon)
         hbox.pack_start(pixmap, False, False)
+
         hbox.pack_start(eventBox, True, True)
         return hbox
-    
+
     def _createHeader(self, workspace):
-        label  = gtk.Label();
+        label = gtk.Label()
         label.set_text("Workspace: " + workspace.name)
         return label
 
-class WindowData:
-    control = None
+    def _on_button_press_event(self, sender, eventData):
+        win = self.__eventBoxToWindow[sender]
+        win.activate()

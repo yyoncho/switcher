@@ -12,3 +12,4 @@ if __name__ == '__main__':
     suite = unittest.TestSuite()
     suite.addTest(tl.loadTestsFromModule(tests.navigator))
     unittest.TextTestRunner(verbosity=2).run(suite)
+

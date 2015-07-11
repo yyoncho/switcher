@@ -9,7 +9,6 @@ import main
 
 
 class NavigatorTest(unittest.TestCase):
-
     def setUp(self):
         self.nav = main.Navigator()
 
@@ -26,12 +25,11 @@ class NavigatorTest(unittest.TestCase):
         self.assertEqual(self.nav.moveForward(), None)
         self.assertEqual(self.nav.moveBackward(), window1)
         self.nav.putWindow(window1)
-        self.assertEqual(self.nav.moveBackward(), window1)
+        self.assertEqual(self.nav.moveBackward(), None)
         self.nav.putWindow(window1)
         self.assertEqual(self.nav.moveForward(), window2)
         self.nav.putWindow(window2)
 
- 
     def testDeleteWindow(self):
         self.nav.putWindow("window1")
         self.nav.putWindow("window2")
@@ -47,12 +45,12 @@ class NavigatorTest(unittest.TestCase):
 
         self.assertEqual(self.nav.moveBackward(), "window2")
         self.nav.putWindow("window2")
-        self.assertEqual(self.nav.moveBackward(), "window2")
+        self.assertEqual(self.nav.moveBackward(), None)
 
     def testAddNone(self):
         self.nav.putWindow(None)
         self.nav.putWindow("window1")
-        self.assertEqual(self.nav.moveBackward(), "window1")
+        self.assertIsNone(self.nav.moveBackward())
 
     def testMoveForward(self):
         self.nav.putWindow("window1")
@@ -63,17 +61,12 @@ class NavigatorTest(unittest.TestCase):
         self.nav.putWindow(self.nav.moveBackward())
         self.nav.putWindow(self.nav.moveBackward())
         self.nav.putWindow(self.nav.moveBackward())
-        
+
         self.assertEqual(self.nav.moveForward(), "window2")
         self.nav.putWindow("window2")
         self.assertEqual(self.nav.moveForward(), "window3")
         self.nav.putWindow("window3")
         self.assertEqual(self.nav.moveForward(), "window4")
 
-
-    def runTest(self):
-        self.run()
-
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testMoving']
     unittest.main()
