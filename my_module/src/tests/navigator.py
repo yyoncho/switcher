@@ -68,5 +68,6 @@ class NavigatorTest(unittest.TestCase):
         self.nav.putWindow("window3")
         self.assertEqual(self.nav.moveForward(), "window4")
 
+
 if __name__ == "__main__":
     unittest.main()

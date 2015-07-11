@@ -5,12 +5,13 @@ Created on Jan 1, 2011
 '''
 import time
 
-import common
-import gtk
 import keybinder
-import wnck
+import gtk
 import pango
+import wnck
 from _Application import _Application as App
+
+import common
 
 
 logger = common.getLogger("default")
@@ -19,12 +20,23 @@ FORWARD_KEY = "<ctrl><alt>n"
 BACKWARD_KEY = "<ctrl><alt>p"
 WORKSPACE_ITEM_WIDTH = 50
 WORKSPACE_ITEM_HEIGHT = 20
+BOLD_TEXT = '<span size="12000"><b>%s</b></span>'
+NORMAL_TEXT = '<span size="12000">%s</span>'
+
+
+def boldText(text):
+    return BOLD_TEXT % (text)
+
+
+def normalText(text):
+    return NORMAL_TEXT % (text)
 
 
 class Navigator:
     def __init__(self):
         self._back = list()
         self._forward = list()
+        self._windows = list()
 
     def moveForward(self):
         logger.debug("moveForward")
@@ -57,6 +69,7 @@ class Navigator:
             self._back.append(window)
 
         self._printLocal()
+        self._windows.append(window)
 
     def removeWindow(self, window):
         if self._back.count(window):
@@ -68,10 +81,13 @@ class Navigator:
 
     def _printLocal(self):
         logger.debug("back=%s, forward=%s" %
-                     (map(self.getWindowName, self._back),
-                      map(self.getWindowName, self._forward)))
+                     (map(self._getWindowName, self._back),
+                      map(self._getWindowName, self._forward)))
 
-    def getWindowName(self, win):
+    def getWindowNumbers(self):
+        return self._windows[:10]
+
+    def _getWindowName(self, win):
         if hasattr(win, 'get_name'):
             return win.get_name().decode('utf8')
         else:
@@ -233,6 +249,7 @@ class MainWindow(gtk.Window):
                 frame.add(control)
                 self._table.attach(frame, col, col + 1, row, row + 1)
                 row = row + 1
+
                 self.__nuberToWindow[str(windowIndex)] = win
             col = col + 1
         self.set_default_size(-1, -1)
@@ -250,8 +267,7 @@ class MainWindow(gtk.Window):
             key = chr(eventData.keyval)
             if key in self.__nuberToWindow:
                 win = self.__nuberToWindow[key]
-                if win:
-                    win.activate()
+                win.activate()
 
     def _focus_changed(self, sender, data):
         self.hide()
@@ -259,12 +275,12 @@ class MainWindow(gtk.Window):
     def _createWinControl(self, win, windowIndex):
         hbox = gtk.HBox()
         winName = win.name.decode('utf-8')
-        labelText = "%s %s" % (windowIndex, winName)
+        labelText = "<b>%s</b> %s" % (windowIndex, winName)
 
         if(win.isActive()):
-            label = gtk.Label("<b>" + labelText + "</b>")
+            label = gtk.Label(boldText(labelText))
         else:
-            label = gtk.Label(labelText)
+            label = gtk.Label(normalText(labelText))
 
         label.set_alignment(0, 0.5)
         label.set_use_markup(True)
@@ -287,7 +303,9 @@ class MainWindow(gtk.Window):
 
     def _createHeader(self, workspace):
         label = gtk.Label()
-        label.set_text("Workspace: " + workspace.name)
+        label.set_size_request(200, -1)
+        label.set_text(boldText(workspace.name))
+        label.set_use_markup(True)
         return label
 
     def _on_button_press_event(self, sender, eventData):
