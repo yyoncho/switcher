@@ -4,12 +4,14 @@ Created on Jan 1, 2011
 @author: kyoncho
 '''
 import time
-import keybinder
-import common
-import wnck
-import gtk
 
+import common
+import gtk
+import keybinder
+import wnck
+import pango
 from _Application import _Application as App
+
 
 logger = common.getLogger("default")
 
@@ -102,7 +104,7 @@ class KeyboardManager:
         if not success:
             raise Exception("Failed to register key " + backKey)
 
-        displayWindowKey = "<ctrl><alt>g"
+        displayWindowKey = "Super_L"
         success = keybinder.bind(displayWindowKey, self._display, None)
         if not success:
             raise Exception("Failed to register key " + displayWindowKey)
@@ -166,14 +168,6 @@ class KeyboardManager:
         self.mainWindow.setWorkspaces(workspaces)
 
 
-class WindowManager:
-    def __init__(self, window):
-        self._window = window
-
-    def display(self, workspaces):
-        self._window.setWorkspaces(workspaces)
-
-
 class Workspace:
     def __init__(self, name):
         self.name = name
@@ -217,26 +211,29 @@ class MainWindow(gtk.Window):
         self._table = gtk.Table()
         self.add(self._table)
         self.show_all()
-        self.__eventBoxToWindow = {}
 
     def setWorkspaces(self, workspaces):
         logger.debug("setWorkspaces")
-        self.__eventBoxToWindow = {}
 
+        self.__eventBoxToWindow = {}
+        self.__nuberToWindow = {}
         for child in self._table.get_children():
             self._table.remove(child)
 
         col = 0
+        windowIndex = 0
         for ws in workspaces:
             row = 1
             header = self._createHeader(ws)
             self._table.attach(header, col, col + 1, 0, 1)
             for win in ws.windows:
                 frame = gtk.Frame()
-                control = self._createWinControl(win)
+                windowIndex = windowIndex + 1
+                control = self._createWinControl(win, windowIndex)
                 frame.add(control)
                 self._table.attach(frame, col, col + 1, row, row + 1)
                 row = row + 1
+                self.__nuberToWindow[str(windowIndex)] = win
             col = col + 1
         self.set_default_size(-1, -1)
         self.show_all()
@@ -247,20 +244,34 @@ class MainWindow(gtk.Window):
         logger.debug("_key_press_event" + str(eventData))
         if eventData.keyval == gtk.keysyms.Escape:
             self.hide()
+        elif eventData.keyval == gtk.keysyms.Tab:
+            pass
+        else:
+            key = chr(eventData.keyval)
+            if key in self.__nuberToWindow:
+                win = self.__nuberToWindow[key]
+                if win:
+                    win.activate()
 
     def _focus_changed(self, sender, data):
         self.hide()
 
-    def _createWinControl(self, win):
+    def _createWinControl(self, win, windowIndex):
         hbox = gtk.HBox()
-        labelText = win.name.decode('utf-8')
-        if(win.isActive()):
-            label = gtk.Label("<b>" + labelText[:30] + "</b>")
-        else:
-            label = gtk.Label(labelText[:30])
+        winName = win.name.decode('utf-8')
+        labelText = "%s %s" % (windowIndex, winName)
 
+        if(win.isActive()):
+            label = gtk.Label("<b>" + labelText + "</b>")
+        else:
+            label = gtk.Label(labelText)
+
+        label.set_alignment(0, 0.5)
         label.set_use_markup(True)
         label.set_tooltip_text(win.name)
+        label.set_ellipsize(pango.ELLIPSIZE_END)
+        label.set_size_request(200, -1)
+
         eventBox = gtk.EventBox()
         self.__eventBoxToWindow[eventBox] = win
 
@@ -282,6 +293,7 @@ class MainWindow(gtk.Window):
     def _on_button_press_event(self, sender, eventData):
         win = self.__eventBoxToWindow[sender]
         win.activate()
+
 
 if __name__ == '__main__':
     logger.debug("Starting application...")
