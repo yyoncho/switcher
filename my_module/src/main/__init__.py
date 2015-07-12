@@ -24,6 +24,10 @@ BOLD_TEXT = '<span size="12000"><b>%s</b></span>'
 NORMAL_TEXT = '<span size="12000">%s</span>'
 LABEL_SIZE = 200
 
+SYMBOLS = map(str, range(1, 10)) + \
+    map(chr, range(ord('a'), ord('z'))) + \
+    map(chr, range(ord('A'), ord('Z')))
+
 
 def boldText(text):
     return BOLD_TEXT % (text)
@@ -112,12 +116,12 @@ class KeyboardManager:
         screen.connect("window-closed", self.window_deleted)
 
         forwKey = conf.getConfig("forward")
-        success = keybinder.bind(forwKey, self.move_forward, None)
+        success = keybinder.bind(forwKey, self._move_forward, None)
         if not success:
             raise Exception("Failed to register key " + forwKey)
 
         backKey = conf.getConfig("backward")
-        success = keybinder.bind(backKey, self.move_backward, None)
+        success = keybinder.bind(backKey, self._move_backward, None)
         if not success:
             raise Exception("Failed to register key " + backKey)
 
@@ -143,13 +147,13 @@ class KeyboardManager:
         logger.debug("Window deleted: " + window.get_name())
         self.nav.removeWindow(window)
 
-    def move_backward(self, data):
+    def _move_backward(self, data):
         window = self.nav.moveBackward()
         self._selectWnckWindow(window)
         if window is not None:
             logger.debug("Move backward: " + window.get_name())
 
-    def move_forward(self, data):
+    def _move_forward(self, data):
         window = self.nav.moveForward()
 
         self._selectWnckWindow(window)
@@ -163,7 +167,6 @@ class KeyboardManager:
             workspace = wnck_window.get_workspace()
             workspace.activate(timestamp)
             wnck_window.activate(timestamp)
-            self.nav.putWindow(wnck_window)
 
     def _init(self):
         logger.debug("init")
@@ -244,20 +247,22 @@ class MainWindow(gtk.Window):
             self._table.remove(child)
 
         col = 0
-        windowIndex = 0
+        keyIndex = 0
         for ws in workspaces:
             row = 1
             header = self._createHeaderLabel(ws)
             self._table.attach(header, col, col + 1, 0, 1)
             for win in ws.windows:
                 frame = gtk.Frame()
-                windowIndex = windowIndex + 1
-                control = self._createWinControl(win, windowIndex)
+                symbol = SYMBOLS[keyIndex]
+                control = self._createWinControl(win, symbol)
                 frame.add(control)
                 self._table.attach(frame, col, col + 1, row, row + 1)
                 row = row + 1
 
-                self.__nuberToWindow[str(windowIndex)] = win
+                self.__nuberToWindow[symbol] = win
+                keyIndex = keyIndex + 1
+
             col = col + 1
         self.set_default_size(-1, -1)
         self.show_all()
@@ -272,6 +277,7 @@ class MainWindow(gtk.Window):
             pass
         else:
             key = chr(eventData.keyval)
+            logger.debug(self.__nuberToWindow)
             if key in self.__nuberToWindow:
                 win = self.__nuberToWindow[key]
                 win.activate()
@@ -279,13 +285,13 @@ class MainWindow(gtk.Window):
     def _focus_changed(self, sender, data):
         self.hide()
 
-    def _createWinControl(self, win, windowIndex):
+    def _createWinControl(self, win, key):
         hbox = gtk.HBox()
 
         eventBox = gtk.EventBox()
         self.__eventBoxToWindow[eventBox] = win
 
-        eventBox.add(self._createWinControl(win, windowIndex))
+        eventBox.add(self._createWindowLabel(win, key))
         eventBox.connect("button-press-event", self._on_button_press_event)
 
         pixmap = gtk.Image()
@@ -306,11 +312,11 @@ class MainWindow(gtk.Window):
         win = self.__eventBoxToWindow[sender]
         win.activate()
 
-    def _createWindowLabel(win, key):
+    def _createWindowLabel(self, win, key):
         utf8Name = win.name.decode('utf-8')
         withKey = "<b>%s</b> %s" % (key, utf8Name)
 
-        text = boldText(withKey) if win.isActive() else boldText(withKey)
+        text = boldText(withKey) if win.isActive() else normalText(withKey)
 
         label = gtk.Label(text)
         label.set_alignment(0, 0.5)
@@ -318,6 +324,7 @@ class MainWindow(gtk.Window):
         label.set_tooltip_text(win.name)
         label.set_ellipsize(pango.ELLIPSIZE_END)
         label.set_size_request(LABEL_SIZE, -1)
+        return label
 
 
 if __name__ == '__main__':
