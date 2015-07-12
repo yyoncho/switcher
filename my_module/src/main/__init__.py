@@ -20,8 +20,6 @@ BACKWARD_KEY = "<ctrl><alt>p"
 SHOW_MAIN = "Super_L"
 
 
-WORKSPACE_ITEM_HEIGHT = 20
-
 BOLD_TEXT = '<span size="12000"><b>%s</b></span>'
 NORMAL_TEXT = '<span size="12000">%s</span>'
 LABEL_SIZE = 200
@@ -212,6 +210,12 @@ class Window:
     def __str__(self):
         return window.get_name()
 
+    def __hash__(self):
+        return hash((self.window))
+
+    def __eq__(self, other):
+        return self.window == other.window
+
 
 class MainWindow(gtk.Window):
     def __init__(self):
@@ -228,12 +232,14 @@ class MainWindow(gtk.Window):
         self._table = gtk.Table()
         self.add(self._table)
         self.show_all()
+        self._keyToWindow = {}
 
     def setWorkspaces(self, workspaces):
         logger.debug("setWorkspaces")
 
         self.__eventBoxToWindow = {}
         self.__nuberToWindow = {}
+
         for child in self._table.get_children():
             self._table.remove(child)
 
@@ -241,7 +247,7 @@ class MainWindow(gtk.Window):
         windowIndex = 0
         for ws in workspaces:
             row = 1
-            header = self._createHeader(ws)
+            header = self._createHeaderLabel(ws)
             self._table.attach(header, col, col + 1, 0, 1)
             for win in ws.windows:
                 frame = gtk.Frame()
@@ -259,7 +265,7 @@ class MainWindow(gtk.Window):
         self.set_resizable(False)
 
     def _key_press_event(self, sender, eventData):
-        logger.debug("_key_press_event" + str(eventData))
+        logger.debug("_key_press_event: eventData=" + str(eventData))
         if eventData.keyval == gtk.keysyms.Escape:
             self.hide()
         elif eventData.keyval == gtk.keysyms.Tab:
@@ -275,24 +281,11 @@ class MainWindow(gtk.Window):
 
     def _createWinControl(self, win, windowIndex):
         hbox = gtk.HBox()
-        winName = win.name.decode('utf-8')
-        labelText = "<b>%s</b> %s" % (windowIndex, winName)
-
-        if(win.isActive()):
-            label = gtk.Label(boldText(labelText))
-        else:
-            label = gtk.Label(normalText(labelText))
-
-        label.set_alignment(0, 0.5)
-        label.set_use_markup(True)
-        label.set_tooltip_text(win.name)
-        label.set_ellipsize(pango.ELLIPSIZE_END)
-        label.set_size_request(LABEL_SIZE, -1)
 
         eventBox = gtk.EventBox()
         self.__eventBoxToWindow[eventBox] = win
 
-        eventBox.add(label)
+        eventBox.add(self._createWinControl(win, windowIndex))
         eventBox.connect("button-press-event", self._on_button_press_event)
 
         pixmap = gtk.Image()
@@ -302,7 +295,7 @@ class MainWindow(gtk.Window):
         hbox.pack_start(eventBox, True, True)
         return hbox
 
-    def _createHeader(self, workspace):
+    def _createHeaderLabel(self, workspace):
         label = gtk.Label()
         label.set_size_request(LABEL_SIZE, -1)
         label.set_text(boldText(workspace.name))
@@ -312,6 +305,19 @@ class MainWindow(gtk.Window):
     def _on_button_press_event(self, sender, eventData):
         win = self.__eventBoxToWindow[sender]
         win.activate()
+
+    def _createWindowLabel(win, key):
+        utf8Name = win.name.decode('utf-8')
+        withKey = "<b>%s</b> %s" % (key, utf8Name)
+
+        text = boldText(withKey) if win.isActive() else boldText(withKey)
+
+        label = gtk.Label(text)
+        label.set_alignment(0, 0.5)
+        label.set_use_markup(True)
+        label.set_tooltip_text(win.name)
+        label.set_ellipsize(pango.ELLIPSIZE_END)
+        label.set_size_request(LABEL_SIZE, -1)
 
 
 if __name__ == '__main__':
