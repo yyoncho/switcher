@@ -24,6 +24,7 @@ WORKSPACE_ITEM_HEIGHT = 20
 
 BOLD_TEXT = '<span size="12000"><b>%s</b></span>'
 NORMAL_TEXT = '<span size="12000">%s</span>'
+LABEL_SIZE = 200
 
 
 def boldText(text):
@@ -286,7 +287,7 @@ class MainWindow(gtk.Window):
         label.set_use_markup(True)
         label.set_tooltip_text(win.name)
         label.set_ellipsize(pango.ELLIPSIZE_END)
-        label.set_size_request(200, -1)
+        label.set_size_request(LABEL_SIZE, -1)
 
         eventBox = gtk.EventBox()
         self.__eventBoxToWindow[eventBox] = win
@@ -303,7 +304,7 @@ class MainWindow(gtk.Window):
 
     def _createHeader(self, workspace):
         label = gtk.Label()
-        label.set_size_request(200, -1)
+        label.set_size_request(LABEL_SIZE, -1)
         label.set_text(boldText(workspace.name))
         label.set_use_markup(True)
         return label
