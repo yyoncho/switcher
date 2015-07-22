@@ -9,12 +9,25 @@ import keybinder
 import gtk
 import pango
 import wnck
+import logging
+import sys
+from os import getpid
 from _Application import _Application as App
 
-import common
+streamHandler = logging.StreamHandler(sys.stdout)
 
-logger = common.getLogger("default")
+loggerConfig = {"Window": logging.DEBUG,
+                "default": logging.DEBUG}
 
+
+def getLogger(name):
+    logger = logging.getLogger(name)
+    logger.addHandler(streamHandler)
+    logger.setLevel(loggerConfig[name])
+    return logger
+
+
+logger = getLogger("default")
 FORWARD_KEY = "<ctrl><alt>n"
 BACKWARD_KEY = "<ctrl><alt>p"
 SHOW_MAIN = "Super_L"
@@ -24,9 +37,11 @@ BOLD_TEXT = '<span size="12000"><b>%s</b></span>'
 NORMAL_TEXT = '<span size="12000">%s</span>'
 LABEL_SIZE = 200
 
+FORWARD = "F"
+BACKWARD = "B"
+
 SYMBOLS = map(str, range(1, 10)) + \
-    map(chr, range(ord('a'), ord('z'))) + \
-    map(chr, range(ord('A'), ord('Z')))
+          map(chr, range(ord('A'), ord('Z')))
 
 
 def boldText(text):
@@ -35,6 +50,13 @@ def boldText(text):
 
 def normalText(text):
     return NORMAL_TEXT % (text)
+
+
+def getColor(input, key):
+    splitItem = lambda x: x.split(": ")
+    keyValues = map(splitItem, input.split("\n"))
+    result = [x[1] for x in keyValues if x[0] == key]
+    return gtk.gdk.color_parse(result[0]) if result else None
 
 
 class Navigator:
@@ -71,7 +93,7 @@ class Navigator:
         if window:
             if self._back.count(window):
                 self._back.remove(window)
-            self._back.append(window)
+                self._back.append(window)
 
         self._printLocal()
         self._windows.append(window)
@@ -82,7 +104,7 @@ class Navigator:
 
         if self._forward.count(window):
             self._forward.remove(window)
-        self._printLocal()
+            self._printLocal()
 
     def _printLocal(self):
         logger.debug("back=%s, forward=%s" %
@@ -134,18 +156,34 @@ class KeyboardManager:
         self.mainWindow = mainWindow
 
     def _display(self, data):
-        self._init()
-        self.mainWindow.show_now()
+        if not self.mainWindow.is_focus():
+            self._init()
+            self.mainWindow.show_now()
 
     def window_focused_switch_handler(self, scr, window):
         win = scr.get_active_window()
         if win is not None:
             logger.debug("Selected mainWindow: " + win.get_name())
-        self.nav.putWindow(win)
+            self.nav.putWindow(win)
 
     def window_deleted(self, scr, window):
         logger.debug("Window deleted: " + window.get_name())
         self.nav.removeWindow(window)
+
+        # refresh the main window if the window is active and in case we
+        # are not handling the closing of the main window.
+        if not self._isMainWindow(window):
+            if self.mainWindow.isVisible:
+                self._init()
+                self.mainWindow.show_now()
+            else:
+                logger.debug("Application window is not " +
+                             "visible no need to updated.")
+        else:
+            logger.debug("The application window has been deleted.")
+
+    def _isMainWindow(self, window):
+        return getpid() == window.get_pid()
 
     def _move_backward(self, data):
         window = self.nav.moveBackward()
@@ -169,17 +207,17 @@ class KeyboardManager:
             wnck_window.activate(timestamp)
 
     def _init(self):
-        logger.debug("init")
         wnck_workspace_to_workspace = dict()
         for ws in self.screen.get_workspaces():
             workspace = Workspace(ws.get_name())
             wnck_workspace_to_workspace[ws] = workspace
 
         for w in self.screen.get_windows():
-            win = Window(w.get_name(), w.get_mini_icon(), w)
-            if w.get_workspace():
-                workspace = wnck_workspace_to_workspace[w.get_workspace()]
-                workspace.windows.append(win)
+            if not self._isMainWindow(w):
+                win = Window(w.get_name(), w.get_mini_icon(), w)
+                if w.get_workspace():
+                    workspace = wnck_workspace_to_workspace[w.get_workspace()]
+                    workspace.windows.append(win)
 
         workspaces = list()
         for ws in self.screen.get_workspaces():
@@ -207,6 +245,11 @@ class Window:
         workspace.activate(timestamp)
         self.window.activate(timestamp)
 
+    def close(self):
+        logger.debug("Closing window")
+        timestamp = int(time.time())
+        self.window.close(timestamp)
+
     def isActive(self):
         return self.window.is_active()
 
@@ -222,11 +265,9 @@ class Window:
 
 class MainWindow(gtk.Window):
     def __init__(self):
-        logger.debug("__init__")
-
         super(gtk.Window, self).__init__()
         self.set_decorated(False)
-        self.set_position(gtk.WIN_POS_CENTER)
+        self.set_position(gtk.WIN_POS_CENTER_ALWAYS)
         self.set_keep_above(True)
         self.connect("key-press-event", self._key_press_event)
         self.connect("focus-out-event", self._focus_changed)
@@ -236,10 +277,14 @@ class MainWindow(gtk.Window):
         self.add(self._table)
         self.show_all()
         self._keyToWindow = {}
+        self.__selected = None
+        self.isVisible = False
+        self._predefinedKeys = {}
 
     def setWorkspaces(self, workspaces):
         logger.debug("setWorkspaces")
 
+        self.__workspaces = workspaces
         self.__eventBoxToWindow = {}
         self.__nuberToWindow = {}
 
@@ -248,44 +293,174 @@ class MainWindow(gtk.Window):
 
         col = 0
         keyIndex = 0
+        self._workspaceLookup = list()
         for ws in workspaces:
+            windowsList = list()
+            windowsList.append(None)
+            self._workspaceLookup.append(windowsList)
             row = 1
             header = self._createHeaderLabel(ws)
             self._table.attach(header, col, col + 1, 0, 1)
             for win in ws.windows:
-                frame = gtk.Frame()
-                symbol = SYMBOLS[keyIndex]
-                control = self._createWinControl(win, symbol)
-                frame.add(control)
-                self._table.attach(frame, col, col + 1, row, row + 1)
-                row = row + 1
+                if win in self._predefinedKeys:
+                    symbol = self._predefinedKeys[win]
+                else:
+                    symbol = SYMBOLS[keyIndex]
+                    keyIndex = keyIndex + 1
 
                 self.__nuberToWindow[symbol] = win
-                keyIndex = keyIndex + 1
+
+                control = self._createWinControl(win, symbol, win.isActive())
+
+                # keep the selected item
+                if(win.isActive()):
+                    self.__selected = (row, col, win, control, symbol)
+
+                self._attachControl(col, row, control)
+
+                row = row + 1
+                windowsList.append((win, control, symbol))
 
             col = col + 1
-        self.set_default_size(-1, -1)
-        self.show_all()
-        self.present()
-        self.set_resizable(False)
+            self.set_default_size(-1, -1)
+            self.show_all()
+            self.present()
+            self.isVisible = True
+            self.set_resizable(False)
 
     def _key_press_event(self, sender, eventData):
-        logger.debug("_key_press_event: eventData=" + str(eventData))
-        if eventData.keyval == gtk.keysyms.Escape:
+        logger.debug("_key_press_event: eventData=" + str(eventData.keyval))
+        logger.debug("_key_press_event: eventData=" + str(eventData.state))
+
+        if eventData.state == gtk.gdk.CONTROL_MASK | \
+           gtk.gdk.MOD1_MASK | gtk.gdk.SHIFT_MASK:
+            # register the shortcut for the current window.
+            keyChar = chr(eventData.keyval).lower()
+            win = self.__selected[2]
+            # first remove the shortcut if the shortcut is already assigned.
+            for key, item in self._predefinedKeys.items():
+                if item == keyChar:
+                    del self._predefinedKeys[key]
+            self._predefinedKeys[win] = keyChar
+            # update the __selected
+            self.__selected = (self.__selected[0],
+                               self.__selected[1],
+                               self.__selected[2],
+                               self.__selected[3],
+                               keyChar)
+
+            logger.debug("Registered the following predefined keys: %s",
+                         self._predefinedKeys)
+            self.setWorkspaces(self.__workspaces)
+
+        elif eventData.state == gtk.gdk.CONTROL_MASK:
+            if eventData.keyval == gtk.keysyms.n:
+                self._updateSelected(1, 0)
+            elif eventData.keyval == gtk.keysyms.p:
+                self._updateSelected(-1, 0)
+            elif eventData.keyval == gtk.keysyms.f:
+                self._updateSelected(0, 1)
+            elif eventData.keyval == gtk.keysyms.b:
+                self._updateSelected(0, -1)
+            elif eventData.keyval == gtk.keysyms.q:
+                self.destroy()
+        elif eventData.keyval == gtk.keysyms.Return:
+            w = self.__selected[2]
+            w.activate()
+        elif eventData.keyval == gtk.keysyms.Escape:
             self.hide()
         elif eventData.keyval == gtk.keysyms.Tab:
             pass
+        elif eventData.keyval == gtk.keysyms.Down:
+            self._updateSelected(1, 0)
+        elif eventData.keyval == gtk.keysyms.Up:
+            self._updateSelected(-1, 0)
+        elif eventData.keyval == gtk.keysyms.Left:
+            self._updateSelected(0, -1)
+        elif eventData.keyval == gtk.keysyms.Right:
+            self._updateSelected(0, 1)
+        elif eventData.keyval == gtk.keysyms.Delete:
+            w = self.__selected[2]
+            w.close()
         else:
-            key = chr(eventData.keyval)
-            logger.debug(self.__nuberToWindow)
-            if key in self.__nuberToWindow:
-                win = self.__nuberToWindow[key]
-                win.activate()
+            if eventData.keyval < 256:
+                key = chr(eventData.keyval)
+                if key in self.__nuberToWindow:
+                    win = self.__nuberToWindow[key]
+                    win.activate()
 
     def _focus_changed(self, sender, data):
+        self.isVisible = False
         self.hide()
 
-    def _createWinControl(self, win, key):
+    def _updateSelected(self, vertical, horizontal):
+
+        logger.debug("Updating selected %s %s, selection data = %s" %
+                     (vertical, horizontal, self.__selected))
+        windowIndex, workspaceIndex, win, current, symbol = self.__selected
+
+        newWindowIndex, newWorkspaceIndex = self.__calculateSelected(
+            windowIndex, workspaceIndex, vertical, horizontal)
+
+        logger.debug(
+            "Selecting window with index (%s, %s) old indexes = (%s, %s)" %
+            (newWorkspaceIndex, newWindowIndex, workspaceIndex, windowIndex))
+
+        # deselect the old item
+        self._table.remove(current)
+        updated = self._createWinControl(win, symbol, False)
+        self._attachControl(workspaceIndex, windowIndex, updated)
+
+        # select the new item
+        newWindow, oldControl, symbol = self._workspaceLookup[
+            newWorkspaceIndex][newWindowIndex]
+
+        logger.debug("New window = " + str(newWindow))
+
+        self._table.remove(oldControl)
+        selectedControl = self._createWinControl(newWindow,
+                                                 symbol,
+                                                 True)
+        self._attachControl(newWorkspaceIndex,
+                            newWindowIndex,
+                            selectedControl)
+        # update selected
+        self.__selected = (newWindowIndex,
+                           newWorkspaceIndex,
+                           newWindow,
+                           selectedControl,
+                           symbol)
+
+        # update the view
+        self.show_all()
+        self.present()
+
+    def __calculateSelected(self, windowIndex, wsIndex, vertical, horizontal):
+        logger.debug(
+            "windowIndex = %s, wsIndex = %s, vertical = %s, horizontal = %s",
+            windowIndex, wsIndex, vertical, horizontal)
+        newWsIndex = wsIndex + horizontal
+        endOfWs = len(self._workspaceLookup) <= newWsIndex or newWsIndex < 0
+        if not endOfWs:
+            ws = self._workspaceLookup[newWsIndex]
+            newWindowIndex = windowIndex + vertical
+            if not len(ws) <= newWindowIndex and newWindowIndex > 0:
+                return newWindowIndex, newWsIndex
+            else:
+                windowIndex = 0 if newWindowIndex > 0 else len(ws)
+                return self.__calculateSelected(
+                    windowIndex, wsIndex, vertical, horizontal)
+        elif endOfWs:
+            wsIndex = -1 if newWsIndex >= 0 else len(self._workspaceLookup)
+            return self.__calculateSelected(
+                windowIndex, wsIndex, vertical, horizontal)
+
+    def _attachControl(self, workspaceIndex, windowIndex, control):
+        self._table.attach(control,
+                           workspaceIndex, workspaceIndex + 1,
+                           windowIndex, windowIndex + 1)
+
+    def _createWinControl(self, win, key, isActive):
         hbox = gtk.HBox()
 
         eventBox = gtk.EventBox()
@@ -294,12 +469,18 @@ class MainWindow(gtk.Window):
         eventBox.add(self._createWindowLabel(win, key))
         eventBox.connect("button-press-event", self._on_button_press_event)
 
+        if isActive:
+            eventBox.modify_bg(gtk.STATE_NORMAL,
+                               self._getSelectedColor())
+
         pixmap = gtk.Image()
         pixmap.set_from_pixbuf(win.icon)
         hbox.pack_start(pixmap, False, False)
-
         hbox.pack_start(eventBox, True, True)
-        return hbox
+
+        result = gtk.Frame()
+        result.add(hbox)
+        return result
 
     def _createHeaderLabel(self, workspace):
         label = gtk.Label()
@@ -326,6 +507,10 @@ class MainWindow(gtk.Window):
         label.set_size_request(LABEL_SIZE, -1)
         return label
 
+    def _getSelectedColor(self):
+        settings = gtk.settings_get_default()
+        colorScheme = settings.get_property("gtk-color-scheme")
+        return getColor(colorScheme, "selected_bg_color")
 
 if __name__ == '__main__':
     logger.debug("Starting application...")
@@ -335,4 +520,5 @@ if __name__ == '__main__':
                               wnck.screen_get_default(),
                               window)
     app = App(window)
+    window.connect("destroy", app.destroy)
     app.start()

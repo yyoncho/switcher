@@ -15,7 +15,7 @@ class _Application:
         '''
         Constructor
         '''
-        mainWindow.connect("destroy", self.__destroy)
+        mainWindow.connect("destroy", self.destroy)
         self._window = mainWindow
 
     def start(self):
@@ -23,6 +23,6 @@ class _Application:
         self._window.hide()
         gtk.main()
 
-    def __destroy(self, args):
+    def destroy(self, args):
         print "Ending GTK loop"
         gtk.main_quit()
