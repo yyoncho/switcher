@@ -364,6 +364,9 @@ class MainWindow(gtk.Window):
                 self._updateSelected(0, -1)
             elif eventData.keyval == gtk.keysyms.q:
                 self.destroy()
+            elif eventData.keyval == gtk.keysyms.j:
+                w = self.__selected[2]
+                w.activate()
         elif eventData.keyval == gtk.keysyms.Return:
             w = self.__selected[2]
             w.activate()
